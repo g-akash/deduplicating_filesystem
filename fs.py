@@ -5,8 +5,23 @@ from __future__ import with_statement
 import os
 import sys
 import errno
+import hashlib
+import psycopg2
 
 from fuse import FUSE, FuseOSError, Operations
+
+BLOCK_SIZE = 4096
+HASH_SIZE = 64
+
+
+#database
+DATABASE = "fuse"
+USER = "postgres"
+PASSWORD = "fusepwd"
+HOST = "127.0.0.1"
+PORT "8090"
+
+CONN_STRING = "database="+DATABASE+",user="+USER+",password="+PASSWORD+",host="+HOST+",port="+PORT
 
 
 class Passthrough(Operations):
@@ -105,12 +120,58 @@ class Passthrough(Operations):
         return os.open(full_path, os.O_WRONLY | os.O_CREAT, mode)
 
     def read(self, path, length, offset, fh):
+        actual_off = offset
+        actual_len = length
+        offset = (offset*HASH_SIZE)/BLOCK_SIZE
+        length = (length*HASH_SIZE)/BLOCK_SIZE
         os.lseek(fh, offset, os.SEEK_SET)
-        return os.read(fh, length)
+        hashes = os.read(fh, length)
+        num_blocks = len(hashes)/HASH_SIZE
+        try:
+
+            conn = psy.copg2.connect(CONN_STRING)
+        except:
+            print "I am unable to connect to database"
+            return ''
+        final_content = ''
+        for i in range(num_blocks):
+            hash = hashes[i*HASH_SIZE,(i+1)*HASH_SIZE]
+            cursor = conn.cursor()
+            cursor.execute("""SELECT block From hashes where hash = '%s'""",%(hash))
+            row=cursor.fetchall()
+            final_content=final_content+row[0]
+        length = actual_len
+        offset actual_off
+        return final_content
 
     def write(self, path, buf, offset, fh):
+        try:
+            conn = psycopg2.connect(CONN_STRING)
+        except:
+            print "I am unable to connect to database"
+            return 0
+        actual_off = offset
+        file_content = ''
+        offset = (offset*HASH_SIZE)/BLOCK_SIZE
         os.lseek(fh, offset, os.SEEK_SET)
-        return os.write(fh, buf)
+        num_blocks = len(buf)/BLOCK_SIZE
+        for i in range(num_blocks):
+            block = buf[i*BLOCK_SIZE,(i+1)*BLOCK_SIZE]
+            hash = hashlib.sha256(block)
+            hash = hash.hexdigest()
+
+            file_content = file_content+hash
+            cursor = conn.cursor()
+            cursor.execute("""Select * from hashes where hash = '%s'"""%(hash))
+            row = cursor.fetchall()
+            if len(row)==0:
+                cursor.execute("""Insert into hashes values('%s', '%s')"""%(hash,block))
+            conn.commit()
+            cursor.close()
+
+        os.write(fh,file_content)
+        offset = actual_off
+        return len(buf)
 
     def truncate(self, path, length, fh=None):
         full_path = self._full_path(path)
