@@ -16,10 +16,10 @@ HASH_SIZE = 64
 
 #database
 DATABASE = "fuse"
-USER = "postgres"
+USER = "akash"
 PASSWORD = "fusepwd"
 HOST = "127.0.0.1"
-PORT "8090"
+PORT = "5432"
 
 CONN_STRING = "database="+DATABASE+",user="+USER+",password="+PASSWORD+",host="+HOST+",port="+PORT
 
@@ -123,40 +123,40 @@ class Passthrough(Operations):
         actual_off = offset
         actual_len = length
         offset = (offset*HASH_SIZE)/BLOCK_SIZE
-        length = (length*HASH_SIZE)/BLOCK_SIZE
+        #length = (length*HASH_SIZE)/BLOCK_SIZE
         os.lseek(fh, offset, os.SEEK_SET)
         hashes = os.read(fh, length)
         num_blocks = len(hashes)/HASH_SIZE
-        try:
-
-            conn = psy.copg2.connect(CONN_STRING)
-        except:
-            print "I am unable to connect to database"
-            return ''
+        conn = psycopg2.connect(database=DATABASE, user=USER,
+                                password=PASSWORD, host=HOST,
+                                port=PORT)
         final_content = ''
         for i in range(num_blocks):
-            hash = hashes[i*HASH_SIZE,(i+1)*HASH_SIZE]
+            hash = hashes[i*HASH_SIZE:(i+1)*HASH_SIZE]
             cursor = conn.cursor()
-            cursor.execute("""SELECT block From hashes where hash = '%s'""",%(hash))
+            cursor.execute("""SELECT * From hashes where hash = '%s'""" %(hash))
             row=cursor.fetchall()
-            final_content=final_content+row[0]
-        length = actual_len
-        offset actual_off
+            final_content=final_content+row[0][1]
+        length = (actual_len*BLOCK_SIZE)/HASH_SIZE
+        offset = actual_off
+        # return hashes
         return final_content
 
     def write(self, path, buf, offset, fh):
-        try:
-            conn = psycopg2.connect(CONN_STRING)
-        except:
-            print "I am unable to connect to database"
-            return 0
+
+        conn = psycopg2.connect(database=DATABASE, user=USER,
+                                password=PASSWORD, host=HOST,
+                                port=PORT)
+            
         actual_off = offset
         file_content = ''
         offset = (offset*HASH_SIZE)/BLOCK_SIZE
         os.lseek(fh, offset, os.SEEK_SET)
+        
         num_blocks = len(buf)/BLOCK_SIZE
         for i in range(num_blocks):
-            block = buf[i*BLOCK_SIZE,(i+1)*BLOCK_SIZE]
+           
+            block = buf[i*BLOCK_SIZE:(i+1)*BLOCK_SIZE]
             hash = hashlib.sha256(block)
             hash = hash.hexdigest()
 
