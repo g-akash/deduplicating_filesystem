@@ -134,7 +134,7 @@ class Passthrough(Operations):
         for i in range(num_blocks):
             hash = hashes[i*HASH_SIZE:(i+1)*HASH_SIZE]
             cursor = conn.cursor()
-            cursor.execute("""SELECT * From hashes where hash = '%s'""" %(hash))
+            cursor.execute("""SELECT * From hashes where hash = %s""" ,(hash,))
             row=cursor.fetchall()
             final_content=final_content+row[0][1]
         length = (actual_len*BLOCK_SIZE)/HASH_SIZE
@@ -162,10 +162,10 @@ class Passthrough(Operations):
 
             file_content = file_content+hash
             cursor = conn.cursor()
-            cursor.execute("""Select * from hashes where hash = '%s'"""%(hash))
+            cursor.execute("""Select * from hashes where hash = %s""",(hash,))
             row = cursor.fetchall()
             if len(row)==0:
-                cursor.execute("""Insert into hashes values('%s', '%s')"""%(hash,block))
+                cursor.execute("""Insert into hashes values(%s, %s)""",(hash,block))
             conn.commit()
             cursor.close()
 
